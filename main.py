@@ -2,85 +2,47 @@ from urllib.request import urlopen
 import json, requests, pandas, os
 from tkinter.ttk import *
 from tkinter import *
-from figure import Figure
-#from repository import Repository
+from tkinter import simpledialog
+from repository import Repository
 
-def create_repository(urlsByBrand, dirPath):
-    print("Creating Repository")
-    figureRepositoryList = []
-    
-    for brand in urlsByBrand:
-        response = requests.get(urlsByBrand.get(brand))
-        
-        if response.status_code == 200:
-            html_content = response.content
-            data = pandas.read_html(html_content)
-            sortedData = data[0]
-            
-            for index, row in data[0].iterrows():
-            
-                if not pandas.isnull(row.tolist()[0]):
-                    item = Figure(row.tolist(), brand)
-                    figureRepositoryList.append(item)
-            
-        else:
-            print("Error: Figure list unable to be retreived.")
-            
-    figureRepositoryList = sorted(figureRepositoryList, key = lambda x: (x.brand, x.name))
-    
-    figureRepositoryFrame = pandas.DataFrame(columns = ["Name", "Brand", "Wave", "Release Year", "Source"])
-    
-    for x in figureRepositoryList:
-        figureRepositoryFrame.loc[len(figureRepositoryFrame)] = x.tolist()
-        
-    figureRepositoryFrame.to_excel(dirPath + "/figureRepository.xlsx", index = False)
-    
-    return figureRepositoryFrame
-        
-def update_repository(figureRepository, urlsByBrand, dirPath):
-    print("Updating Repository")
-    
-    for brand in urlsByBrand:
-        response = requests.get(urlsByBrand.get(brand))
-        
-        if response.status_code == 200:
-                html_content = response.content
-                data = pandas.read_html(html_content)
-                sortedData = data[0]
-                
-                for index, row in data[0].iterrows():
-                    
-                    if not pandas.isnull(row.tolist()[0]):
-                        item = Figure(row.tolist(), brand)
-                        
-                        if item.tolist() not in figureRepository.values.tolist():
-                            print("Adding " + item.name)
-                            figureRepository.loc[len(figureRepository)] = item.tolist()
-                            
-    figureRepository = figureRepository.sort_values(by=['Brand', 'Name']).reset_index(drop=True)
-    figureRepository.to_excel(dirPath + "/figureRepository.xlsx", index = False)
-                      
-    return figureRepository
+repoPath = os.getcwd().replace("\\", "/") + "/Repositories"
 
-def sort_tree(repository, tree, columnName, reverse):
+def update_collection_tree():
+    collectionList = Menu(menubar, tearoff=0)    
     
-    repository = repository.sort_values(by = columnName, ascending = not reverse).reset_index(drop=True)
+    collectionList.add_command(label = "Create New Collection", command = create_collection)
+    
+    for collection in os.listdir(repoPath + "/Stored Collections/"):
+        collectionList.add_command(label = collection[:-5])
+    
+    collectionList.add_command(label = os.listdir(repoPath + "/Stored Collections/").sort())
+
+def create_collection():
+    owner = simpledialog.askstring("Create new collection.", "Please enter the collection owner's name.")
+    collection = Repository(owner)
+    
+    update_collection_tree()
+    
+def load_collection(collectionPath):
+    pass
+
+def sort_tree(repository, columnName, reverse):
+    
+    repository.sort_values([columnName, "Name"], reverse)
 
     tree.delete(*tree.get_children())
         
     for col in repository.columns:
-        tree.heading(col, text=col, command = lambda col = col: sort_tree(repository, tree, col, reverse if columnName != col else not reverse))
+        tree.heading(col, text=col, command = lambda col = col: sort_tree(repository, col, reverse if columnName != col else not reverse))
         tree.column(col, width=100)
         
     for _, row in repository.iterrows():
         tree.insert("", "end", values=list(row))
         
-    
 if __name__ == "__main__":
     
     urlsByBrand = {"McFarlane Toys": "https://www.mephitsu.co.uk/mcfarlane-directory", "Marvel Legends": "https://www.mephitsu.co.uk/marvel-legends"}
-    dirPath = "C:/Users/andre/Documents/VS Code/Collection/Repositories"
-    
+        
     root = Tk()
     root.geometry("1000x300")
     root.title("Collection Manager")
@@ -89,9 +51,14 @@ if __name__ == "__main__":
         
     menubar.add_command(label = "Available Figures")
     
-    collectionList = Menu(menubar, tearoff=0)
+    if not os.path.isfile(repoPath + "/Stored Collections/"):
+        os.makedirs(repoPath + "/Stored Collections/", exist_ok = True)
+        
+    collectionList = Menu(menubar, tearoff=0)    
     
-    for collection in os.listdir(dirPath + "/Stored Collections/"):
+    collectionList.add_command(label = "Create New Collection", command = create_collection)
+    
+    for collection in os.listdir(repoPath + "/Stored Collections/"):
         collectionList.add_command(label = collection[:-5])
         
     menubar.add_cascade(label="Collections", menu = collectionList)
@@ -99,19 +66,21 @@ if __name__ == "__main__":
     
     root.config(menu = menubar)
     
-    try:
-        figureRepository = update_repository(pandas.read_excel(dirPath + "/figureRepository.xlsx"), urlsByBrand, dirPath)
-    except FileNotFoundError:
-        figureRepository = create_repository(urlsByBrand, dirPath)
+    figureRepository = Repository("master")
+    
+    if os.path.isfile(repoPath + "/figureRepository.xlsx"):
+        figureRepository.update_repository(urlsByBrand)
         
+    else:
+        figureRepository.create_repository(urlsByBrand)
+            
     tree = Treeview(root,  columns = list(figureRepository.columns), show = 'headings')
     tree.pack(expand=True, fill='both')
     
     for col in figureRepository.columns:
-        tree.heading(col, text=col, command = lambda col = col: sort_tree(figureRepository, tree, col, False))
-        print(col)
-        
+        tree.heading(col, text=col, command = lambda col = col: sort_tree(figureRepository, col, False))
+                
     for _, row in figureRepository.iterrows():
         tree.insert("", "end", values=list(row))
-        
+    
     root.mainloop()
