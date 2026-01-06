@@ -39,6 +39,7 @@ class Repository:
         self.repository = pandas.read_excel(self.fileLoc + "/" + self.fileName)
                     
     def create_repository(self, urlsByBrand):
+        print("Creating repository")
         if self.owner != "master":
             return
         
